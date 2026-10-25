@@ -52,6 +52,19 @@ main{padding:0 14px}
 .scale button.on[data-v="1"]{background:var(--s1)}.scale button.on[data-v="2"]{background:var(--s2)}
 .scale button.on[data-v="3"]{background:var(--s3)}.scale button.on[data-v="4"]{background:var(--s4)}
 .scale button.on[data-v="5"]{background:var(--s5)}
+.slider{position:relative;--tc:var(--ink);padding:4px 0 0}
+.rng{-webkit-appearance:none;appearance:none;width:100%;height:64px;background:transparent;margin:0;display:block;touch-action:pan-y}
+.rng::-webkit-slider-runnable-track{height:18px;border-radius:9px;background:linear-gradient(90deg,var(--s1),var(--s2),var(--s3),var(--s4),var(--s5))}
+.rng::-moz-range-track{height:18px;border-radius:9px;background:linear-gradient(90deg,var(--s1),var(--s2),var(--s3),var(--s4),var(--s5))}
+.rng::-webkit-slider-thumb{-webkit-appearance:none;width:56px;height:56px;border-radius:50%;background:#fff;border:7px solid var(--tc);margin-top:-19px;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+.rng::-moz-range-thumb{width:42px;height:42px;border-radius:50%;background:#fff;border:7px solid var(--tc);box-shadow:0 2px 8px rgba(0,0,0,.35)}
+.unset .rng::-webkit-slider-runnable-track{opacity:.35}.unset .rng::-moz-range-track{opacity:.35}
+.unset .rng::-webkit-slider-thumb{opacity:0}.unset .rng::-moz-range-thumb{opacity:0}
+.ticks{position:relative;height:48px}
+.ticks button{position:absolute;top:0;transform:translateX(-50%);background:none;border:0;padding:2px 8px;font-size:30px;font-weight:800;color:var(--ink)}
+.ticks button.half{color:var(--mute);font-weight:400}
+.metric .q span{font-size:30px !important}
+.editq{display:block;margin:20px auto 0;background:none;border:0;color:var(--acc);font-weight:700;font-size:26px;padding:8px}
 .ends{display:flex;justify-content:space-between;color:var(--mute);font-size:22px;margin-top:4px}
 .notebtn{margin-top:10px;background:none;border:0;color:var(--acc);font-weight:700;font-size:26px;padding:6px 0}
 .noterow{display:none;margin-top:8px;gap:8px}
@@ -107,7 +120,8 @@ label.f span{display:block;font-size:24px;color:var(--mute);margin-bottom:4px;fo
 input.t,select.t{width:100%;font:600 28px system-ui,sans-serif;padding:12px;border-radius:14px;border:2px solid var(--line);background:var(--bg);color:var(--ink)}
 .mrow{border-top:2px solid var(--line);padding:14px 0}
 .mrow:first-child{border-top:0}
-.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+select.t{padding:12px 4px;font-size:26px}
 </style>
 </head>
 <body>
@@ -239,7 +253,7 @@ window.AppSync = (function () {
 <section data-view="settings">
   <div class="card">
     <h2>Questions</h2>
-    <p class="mute small" style="margin-top:0">Every question is rated 1–5. Words under 1 and 5 are optional.</p>
+    <p class="mute small" style="margin-top:0">Every question is rated 1–5 on a slider (halves like 2.5 allowed). Rename, add or delete questions here. Words for 1 and 5 are optional.</p>
     <div id="mlist"></div>
     <button class="ghost" id="addm">+ Add question</button>
   </div>
@@ -298,7 +312,14 @@ function nearestSlot(d){
 const fmtDay = k => { const d = new Date(k+'T12:00'); return d.toLocaleDateString('en-GB',{weekday:'short', day:'numeric', month:'short'}); };
 function toast(t){ const el=$('#toast'); el.textContent=t; el.classList.add('show'); clearTimeout(toast.t); toast.t=setTimeout(()=>el.classList.remove('show'),1800); }
 const esc = s => String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const word = (m,v) => m.id==='mood' ? MOOD_WORDS[v-1] : (v===1 ? (m.lo||'') : v===5 ? (m.hi||'') : '');
+const STEPS = [1,1.5,2,2.5,3,3.5,4,4.5,5];
+const col = v => 'var(--s' + Math.min(5, Math.max(1, Math.round(v))) + ')';
+const word = (m,v) => {
+  if (v==null) return '';
+  if (m.id==='mood') return v%1 ? MOOD_WORDS[Math.floor(v)-1]+'–'+MOOD_WORDS[Math.ceil(v)-1] : MOOD_WORDS[v-1];
+  return v===1 ? (m.lo||'') : v===5 ? (m.hi||'') : '';
+};
+const label = (m,v) => { const w = word(m,v); return v==null ? '' : (w ? v+' · '+w : String(v)); };
 
 /* ---------- check-in ---------- */
 let selDay = dkey(new Date()), selSlot = nearestSlot(new Date()), draft = {};
@@ -329,35 +350,40 @@ function renderForm(){
     metrics.map(m => {
       const v = draft.values[m.id], n = draft.notes[m.id] || '';
       return `<div class="metric" data-m="${m.id}">
-        <div class="q">${esc(m.name)}<span>${v ? esc(word(m,v) || v) : ''}</span></div>
-        <div class="scale">${[1,2,3,4,5].map(i => `<button data-v="${i}" class="${v===i?'on':''}">${i}</button>`).join('')}</div>
+        <div class="q">${esc(m.name)}<span>${esc(label(m,v))}</span></div>
+        <div class="slider ${v==null?'unset':''}" style="--tc:${v==null?'var(--ink)':col(v)}"><input type="range" class="rng" min="1" max="5" step="0.5" value="${v ?? 3}" aria-label="${esc(m.name)}"></div>
+        <div class="ticks">${STEPS.map((t,i) => `<button data-t="${t}" class="${t%1?'half':''}" style="left:calc(28px + (100% - 56px) * ${i} / 8)">${t%1?'·':t}</button>`).join('')}</div>
         <div class="ends"><span>${esc(m.id==='mood'?'Terrible':m.lo||'')}</span><span>${esc(m.id==='mood'?'Excellent':m.hi||'')}</span></div>
         <button class="notebtn">${n ? '✎ Note' : '+ Add a note'}</button>
         <div class="noterow ${n?'open':''}"><textarea placeholder="Optional — type or tap 🎤">${esc(n)}</textarea><button class="mic" title="Dictate">🎤</button></div>
       </div>`;
     }).join('') +
-    `<button class="big" id="save">${existing ? 'Update' : 'Save check-in'}</button>`;
+    `<button class="big" id="save">${existing ? 'Update' : 'Save check-in'}</button>` +
+    `<button class="editq" id="editq">✎ Add / edit / delete questions</button>`;
   updateSave();
 }
 function updateSave(){ const b=$('#save'); if(b) b.disabled = metrics.some(m => !draft.values[m.id]); }
 $('#form').addEventListener('click', ev => {
   const box = ev.target.closest('.metric');
   if (ev.target.id === 'save') return saveEntry();
+  if (ev.target.id === 'editq') return go('settings');
   if (!box) return;
-  const id = box.dataset.m;
-  const vb = ev.target.closest('.scale button');
-  if (vb){
-    draft.values[id] = +vb.dataset.v;
-    box.querySelectorAll('.scale button').forEach(b => b.classList.toggle('on', b===vb));
-    const m = metrics.find(x=>x.id===id);
-    box.querySelector('.q span').textContent = word(m, +vb.dataset.v) || vb.dataset.v;
-    if (navigator.vibrate) navigator.vibrate(15);
-    updateSave(); return;
-  }
+  const tb = ev.target.closest('.ticks button');
+  if (tb){ box.querySelector('.rng').value = tb.dataset.t; setVal(box, +tb.dataset.t); return; }
   if (ev.target.closest('.notebtn')){ const r = box.querySelector('.noterow'); r.classList.add('open'); r.querySelector('textarea').focus(); return; }
   if (ev.target.closest('.mic')) dictate(box);
 });
+function setVal(box, v){
+  const id = box.dataset.m, m = metrics.find(x=>x.id===id), was = draft.values[id];
+  draft.values[id] = v;
+  const sl = box.querySelector('.slider'); sl.classList.remove('unset'); sl.style.setProperty('--tc', col(v));
+  box.querySelector('.q span').textContent = label(m, v);
+  if (was !== v && navigator.vibrate) navigator.vibrate(12);
+  updateSave();
+}
+$('#form').addEventListener('pointerup', ev => { if (ev.target.classList.contains('rng')) setVal(ev.target.closest('.metric'), +ev.target.value); });
 $('#form').addEventListener('input', ev => {
+  if (ev.target.classList.contains('rng')) return setVal(ev.target.closest('.metric'), +ev.target.value);
   if (ev.target.tagName === 'TEXTAREA') draft.notes[ev.target.closest('.metric').dataset.m] = ev.target.value;
 });
 
@@ -455,7 +481,7 @@ function renderStats(){
   html += `<div class="card"><h2>Score spread</h2>` + metrics.map(m => {
     const vs = list.map(e=>e.values[m.id]).filter(v=>v!=null), n = vs.length || 1;
     return `<div style="margin-bottom:14px"><b>${esc(m.name)}</b><div style="display:flex;height:40px;border-radius:10px;overflow:hidden;margin-top:6px">` +
-      [1,2,3,4,5].map(v => { const c = vs.filter(x=>x===v).length; return c ? `<div style="flex:${c};background:${SCOL[v]};color:#fff;font-weight:800;font-size:22px;display:flex;align-items:center;justify-content:center">${v}</div>` : ''; }).join('') +
+      STEPS.map(v => { const c = vs.filter(x=>x===v).length; return c ? `<div style="flex:${c};background:${col(v)};color:#fff;font-weight:800;font-size:22px;display:flex;align-items:center;justify-content:center;opacity:${v%1?.8:1}">${v}</div>` : ''; }).join('') +
       `</div></div>`;
   }).join('') + `</div>`;
 
@@ -503,7 +529,7 @@ function renderHistory(){
   const byDay = {}; entries.forEach(e => (byDay[e.date] = byDay[e.date] || []).push(e));
   el.innerHTML = Object.keys(byDay).sort().reverse().slice(0,60).map(d => `<div class="card day"><h3>${fmtDay(d)}</h3>` +
     byDay[d].sort((a,b)=>a.slot-b.slot).map(e => `<div class="entry"><div class="h">${e.slot}:00</div><div class="vals">` +
-      metrics.map(m => e.values[m.id]!=null ? `<span class="chip" style="background:${SCOL[e.values[m.id]]}" title="${esc(m.name)}">${esc(m.name.split(' ')[0])} ${e.values[m.id]}</span>` : '').join('') +
+      metrics.map(m => e.values[m.id]!=null ? `<span class="chip" style="background:${col(e.values[m.id])}" title="${esc(m.name)}">${esc(m.name.split(' ')[0])} ${e.values[m.id]}</span>` : '').join('') +
       metrics.filter(m => e.notes && e.notes[m.id]).map(m => `<div class="n"><b>${esc(m.name)}:</b> ${esc(e.notes[m.id])}</div>`).join('') +
       `</div><button data-del="${e.id}" aria-label="Delete">🗑</button></div>`).join('') + `</div>`).join('');
 }
@@ -517,11 +543,12 @@ $('#hist').addEventListener('click', ev => {
 function renderSettings(){
   $('#mlist').innerHTML = metrics.map((m,i) => `<div class="mrow" data-i="${i}">
     <label class="f"><span>Question ${i+1}</span><input class="t" data-k="name" value="${esc(m.name)}"></label>
-    <div class="row" style="flex-wrap:nowrap">
-      <input class="t" data-k="lo" placeholder="1 = …" value="${esc(m.lo)}">
-      <input class="t" data-k="hi" placeholder="5 = …" value="${esc(m.hi)}">
-      ${metrics.length>1 ? `<button class="ghost" data-rm="${i}" aria-label="Remove">✕</button>` : ''}
-    </div></div>`).join('');
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <label class="f" style="margin:0"><span>Word for 1</span><input class="t" data-k="lo" placeholder="optional" value="${esc(m.lo)}"></label>
+      <label class="f" style="margin:0"><span>Word for 5</span><input class="t" data-k="hi" placeholder="optional" value="${esc(m.hi)}"></label>
+    </div>
+    ${metrics.length>1 ? `<button class="editq" style="margin:10px 0 0;padding:6px 0;color:var(--s1)" data-rm="${i}">🗑 Delete this question</button>` : ''}
+    </div>`).join('');
   const hrs = Array.from({length:24},(_,h)=>`<option value="${h}">${h}:00</option>`).join('');
   $('#sStart').innerHTML = hrs; $('#sEnd').innerHTML = hrs;
   $('#sStart').value = cfg.start; $('#sEnd').value = cfg.end; $('#sStep').value = cfg.step; $('#sLang').value = cfg.lang;
