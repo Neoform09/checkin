@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#c8643b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Check-in</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+:root{
+  --bg:#f6f2ec;--card:#fffdf9;--ink:#1c1b19;--mute:#6f6b63;--line:#ddd5c9;
+  --acc:#c8643b;--acc-soft:#f6e1d5;--ok:#3f8a5a;
+  --s1:#c0392b;--s2:#e07b39;--s3:#d9b23a;--s4:#7fae4f;--s5:#2f8f5b;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#161513;--card:#211f1c;--ink:#eeebe4;--mute:#a29d93;--line:#38342e;
+  --acc:#e3855c;--acc-soft:#3a2a21;--ok:#6cc08b;
+}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:500 28px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:150px;-webkit-tap-highlight-color:transparent}
+h1{font-size:40px;margin:0;white-space:nowrap}
+h2{font-size:34px;margin:0 0 12px}
+button{font:inherit;color:inherit;cursor:pointer}
+header{padding:22px 18px 10px;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+header .when{color:var(--mute);font-size:24px;text-align:right}
+main{padding:0 14px}
+.card{background:var(--card);border:2px solid var(--line);border-radius:22px;padding:20px 18px;margin:0 0 18px}
+.mute{color:var(--mute)}
+.small{font-size:24px}
+
+/* slot strip */
+.slots{display:flex;gap:8px;overflow-x:auto;padding:4px 0 6px;scrollbar-width:none}
+.slots::-webkit-scrollbar{display:none}
+.slot{flex:0 0 auto;min-width:92px;padding:12px 6px;border-radius:16px;border:2px solid var(--line);background:var(--card);text-align:center;font-weight:700;font-size:28px}
+.slot small{display:block;font-size:20px;font-weight:600;color:var(--mute)}
+.slot.done{background:var(--ok);border-color:var(--ok);color:#fff}
+.slot.done small{color:#e6f5ea}
+.slot.sel{outline:4px solid var(--acc);outline-offset:2px}
+.slot.missed small{color:var(--s1)}
+
+/* metric */
+.metric{margin:0 0 26px}
+.metric .q{font-weight:800;font-size:32px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.metric .q span{font-weight:600;font-size:26px;color:var(--acc)}
+.scale{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.scale button{height:88px;border-radius:18px;border:2px solid var(--line);background:var(--bg);font-size:38px;font-weight:800}
+.scale button.on{color:#fff;border-color:transparent;transform:scale(1.04)}
+.scale button.on[data-v="1"]{background:var(--s1)}.scale button.on[data-v="2"]{background:var(--s2)}
+.scale button.on[data-v="3"]{background:var(--s3)}.scale button.on[data-v="4"]{background:var(--s4)}
+.scale button.on[data-v="5"]{background:var(--s5)}
+.ends{display:flex;justify-content:space-between;color:var(--mute);font-size:22px;margin-top:4px}
+.notebtn{margin-top:10px;background:none;border:0;color:var(--acc);font-weight:700;font-size:26px;padding:6px 0}
+.noterow{display:none;margin-top:8px;gap:8px}
+.noterow.open{display:flex}
+.noterow textarea{flex:1;min-height:110px;font:500 28px/1.3 system-ui,sans-serif;padding:12px;border-radius:14px;border:2px solid var(--line);background:var(--bg);color:var(--ink);resize:vertical}
+.mic{flex:0 0 84px;border-radius:14px;border:2px solid var(--line);background:var(--bg);font-size:40px}
+.mic.live{background:var(--s1);color:#fff;border-color:var(--s1);animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.6}}
+
+.big{display:block;width:100%;padding:22px;border:0;border-radius:20px;background:var(--acc);color:#fff;font-size:34px;font-weight:800}
+.big:disabled{opacity:.4}
+.ghost{background:none;border:2px solid var(--line);border-radius:16px;padding:12px 18px;font-weight:700}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.toast{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:16px 26px;border-radius:16px;font-weight:700;opacity:0;transition:.3s;pointer-events:none;z-index:9}
+.toast.show{opacity:1}
+
+/* tabs */
+nav{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(4,1fr);background:var(--card);border-top:2px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
+nav button{background:none;border:0;padding:10px 0;font-size:22px;font-weight:700;color:var(--mute);display:flex;flex-direction:column;align-items:center;gap:2px}
+nav button b{font-size:38px;line-height:1}
+nav button.on{color:var(--acc)}
+section[data-view]{display:none}
+section[data-view].on{display:block}
+
+/* stats */
+.seg{display:flex;border:2px solid var(--line);border-radius:16px;overflow:hidden;margin-bottom:18px}
+.seg button{flex:1;border:0;background:none;padding:14px 0;font-weight:700;font-size:23px;white-space:nowrap}
+.seg button.on{background:var(--acc);color:#fff}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.kpi{background:var(--bg);border-radius:16px;padding:14px}
+.kpi .v{font-size:52px;font-weight:800;line-height:1.05}
+.kpi .l{font-size:22px;color:var(--mute);font-weight:600}
+.trend{width:100%;height:auto;display:block;margin-top:8px}
+.bars{display:grid;gap:8px;margin-top:8px}
+.bar{display:grid;grid-template-columns:90px 1fr 70px;align-items:center;gap:10px;font-size:24px}
+.bar i{display:block;height:30px;border-radius:8px;background:var(--acc)}
+.bar .t{background:var(--bg);border-radius:8px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:22px;color:var(--mute);margin-top:6px}
+.legend span::before{content:"";display:inline-block;width:18px;height:18px;border-radius:5px;margin-right:6px;vertical-align:-2px;background:var(--c)}
+
+/* history */
+.day h3{font-size:28px;margin:8px 0;color:var(--mute)}
+.entry{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-top:2px solid var(--line)}
+.entry .h{font-weight:800;font-size:30px;min-width:84px}
+.entry .vals{flex:1}
+.chip{display:inline-block;padding:2px 12px;border-radius:10px;color:#fff;font-weight:800;margin:0 6px 6px 0;font-size:24px}
+.entry .n{font-size:24px;color:var(--mute);margin-top:2px}
+.entry button{background:none;border:0;font-size:30px;padding:4px 8px}
+
+/* settings */
+label.f{display:block;margin:0 0 14px}
+label.f span{display:block;font-size:24px;color:var(--mute);margin-bottom:4px;font-weight:600}
+input.t,select.t{width:100%;font:600 28px system-ui,sans-serif;padding:12px;border-radius:14px;border:2px solid var(--line);background:var(--bg);color:var(--ink)}
+.mrow{border-top:2px solid var(--line);padding:14px 0}
+.mrow:first-child{border-top:0}
+.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+</style>
+</head>
+<body>
+<style>
+#appsync{margin:12px 14px;padding:16px 18px;border-radius:16px;border:3px solid #c8643b;background:#fff4ee;color:#1c1b19;font:500 26px/1.35 system-ui,-apple-system,"Segoe UI",sans-serif}
+#appsync[hidden]{display:none!important}
+#appsync b{display:block;font-size:30px;margin-bottom:6px}
+#appsync .as-msg{margin:0 0 12px}
+#appsync .as-row{display:flex;gap:10px;flex-wrap:wrap}
+#appsync input{flex:1 1 220px;min-width:0;font:600 28px system-ui,sans-serif;padding:12px 14px;border:2px solid #b9b3a8;border-radius:12px;background:#fff;color:#1c1b19}
+#appsync button{font:700 28px system-ui,sans-serif;padding:12px 22px;border:0;border-radius:12px;background:#1c1b19;color:#fff;cursor:pointer}
+#appsync .as-x{background:transparent;color:#6f6b63;padding:12px 8px;font-weight:600}
+@media (prefers-color-scheme:dark){#appsync{background:#2d231e;color:#eeebe4;border-color:#e3855c}#appsync input{background:#161513;color:#eeebe4;border-color:#4a463f}#appsync button{background:#eeebe4;color:#161513}#appsync .as-x{background:transparent;color:#a29d93}}
+</style>
+<div id="appsync" hidden>
+  <b>Send this log to Claude</b>
+  <p class="as-msg" id="appsync-msg">Enter your password once. After that, everything you save is sent automatically.</p>
+  <div class="as-row"><input id="appsync-pass" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="password" aria-label="Password"><button id="appsync-save" type="button">Save</button><button id="appsync-later" class="as-x" type="button">Later</button></div>
+</div>
+<script>
+// Sends saved entries to Igor's "App Logs" Google Sheet. Shared by all his phone apps.
+window.AppSync = (function () {
+  var URL = "https://script.google.com/macros/s/AKfycbztATiu4PQzOnIuSqcF1AocXGo1RfsupmiqJVyFjFSRJUl5Jb_bS2Y8YTTcJ5IZwO19YQ/exec";
+  var KQ = "appsync-queue", KP = "appsync-pass", KL = "appsync-later";
+  function get(k, d) { try { var v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }
+  function put(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  var busy = false, box, msg;
+
+  function showBox(text) {
+    if (!box) return;
+    if (text) msg.textContent = text;
+    box.hidden = false;
+  }
+  function setup() {
+    box = document.getElementById("appsync"); msg = document.getElementById("appsync-msg");
+    if (!box) return;
+    if (box.parentNode !== document.body || document.body.firstElementChild !== box) document.body.insertBefore(box, document.body.firstChild);
+    document.getElementById("appsync-save").addEventListener("click", function () {
+      var p = document.getElementById("appsync-pass").value.trim().toLowerCase();
+      if (!p) return;
+      put(KP, p); put(KL, 0); box.hidden = true; msg.textContent = "Checking…";
+      check();
+    });
+    document.getElementById("appsync-later").addEventListener("click", function () { put(KL, Date.now()); box.hidden = true; });
+    if (!get(KP, "") && Date.now() - get(KL, 0) > 12 * 3600 * 1000) showBox();
+    setTimeout(flush, 1500);
+  }
+
+  function post(body) {
+    return fetch(URL, { method: "POST", body: JSON.stringify(body) }).then(function (r) { return r.json(); });
+  }
+  // Called after a password is typed: confirms it right away, even with nothing to send.
+  function check() {
+    var pass = get(KP, "");
+    post({ key: pass, app: "_check", id: "check" }).then(function (r) {
+      if (r && r.error === "password") { put(KP, ""); showBox("That password didn't work. Please type it again."); return; }
+      flush();
+    }).catch(function () { flush(); });
+  }
+
+  function send(app, entry) {
+    if (!entry || !entry.id) return;
+    var q = get(KQ, []).filter(function (x) { return !(x.app === app && x.id === entry.id); });
+    q.push({ app: app, id: String(entry.id), date: entry.date || "", summary: entry.summary || "", details: entry.details || {} });
+    put(KQ, q.slice(-500));
+    flush();
+  }
+
+  function flush() {
+    if (busy) return;
+    var q = get(KQ, []);
+    if (!q.length) return;
+    var pass = get(KP, "");
+    if (!pass) { if (Date.now() - get(KL, 0) > 12 * 3600 * 1000) showBox(); return; }
+    if (navigator.onLine === false) return;
+    busy = true;
+    var item = q[0];
+    post({ key: pass, app: item.app, id: item.id, date: item.date, summary: item.summary, details: item.details })
+      .then(function (r) {
+        busy = false;
+        if (r && r.ok) {
+          put(KQ, get(KQ, []).filter(function (x) { return !(x.app === item.app && x.id === item.id && x.summary === item.summary); }));
+          flush();
+        } else if (r && r.error === "password") {
+          put(KP, ""); showBox("That password didn't work. Please type it again.");
+        }
+      })
+      .catch(function () { busy = false; });
+  }
+
+  // Sends an app's existing history once, the first time this code runs on the phone.
+  function backfill(name, fn) {
+    if (get("appsync-bf-" + name, 0)) return;
+    try { fn(); put("appsync-bf-" + name, 1); } catch (e) {}
+  }
+
+  window.addEventListener("online", flush);
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") flush(); });
+  setInterval(flush, 60000);
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", setup); else setup();
+  return { send: send, flush: flush, backfill: backfill };
+})();
+</script>
+
+<header><h1>Check-in</h1><div class="when" id="clock"></div></header>
+<main>
+
+<!-- CHECK-IN -->
+<section data-view="now" class="on">
+  <div class="card">
+    <div class="row" style="justify-content:space-between"><h2 style="margin:0">Today</h2><span class="mute small" id="donecount"></span></div>
+    <div class="slots" id="slots"></div>
+  </div>
+  <div class="card" id="form"></div>
+</section>
+
+<!-- STATS -->
+<section data-view="stats">
+  <div class="seg" id="range">
+    <button data-r="1" class="on">Today</button><button data-r="7">7 days</button><button data-r="30">30 days</button><button data-r="0">All</button>
+  </div>
+  <div id="statsbody"></div>
+</section>
+
+<!-- HISTORY -->
+<section data-view="history"><div id="hist"></div></section>
+
+<!-- SETTINGS -->
+<section data-view="settings">
+  <div class="card">
+    <h2>Questions</h2>
+    <p class="mute small" style="margin-top:0">Every question is rated 1–5. Words under 1 and 5 are optional.</p>
+    <div id="mlist"></div>
+    <button class="ghost" id="addm">+ Add question</button>
+  </div>
+  <div class="card">
+    <h2>Schedule</h2>
+    <div class="three">
+      <label class="f"><span>From</span><select class="t" id="sStart"></select></label>
+      <label class="f"><span>To</span><select class="t" id="sEnd"></select></label>
+      <label class="f"><span>Every</span><select class="t" id="sStep"><option value="1">1 h</option><option value="2">2 h</option><option value="3">3 h</option><option value="4">4 h</option></select></label>
+    </div>
+    <label class="f"><span>Dictation language</span>
+      <select class="t" id="sLang"><option value="sl-SI">Slovenščina</option><option value="en-US">English</option><option value="hr-HR">Hrvatski</option><option value="de-DE">Deutsch</option></select></label>
+    <button class="ghost" id="notif">Turn on reminders while the app is open</button>
+    <p class="mute small">The signal itself comes from your phone alarms (10, 12, 14, 16, 18, 20, 22). This page can't ring when it's closed.</p>
+  </div>
+  <div class="card">
+    <h2>Data</h2>
+    <div class="row"><button class="ghost" id="csv">Download CSV</button><button class="ghost" id="resend">Re-send all to Claude</button></div>
+  </div>
+</section>
+</main>
+
+<nav id="tabs">
+  <button data-go="now" class="on"><b>✓</b>Check-in</button>
+  <button data-go="stats"><b>📈</b>Stats</button>
+  <button data-go="history"><b>☰</b>History</button>
+  <button data-go="settings"><b>⚙</b>Settings</button>
+</nav>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem('ci-'+k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem('ci-'+k, JSON.stringify(v)); }catch(e){} }
+};
+const DEFAULT_METRICS = [
+  {id:'energy', name:'Energy level', lo:'Empty', hi:'Full'},
+  {id:'mood',   name:'How do I feel', lo:'Terrible', hi:'Excellent'},
+  {id:'prod',   name:'Productivity', lo:'Nothing done', hi:'Very productive'}
+];
+const MOOD_WORDS = ['Terrible','Bad','OK','Good','Excellent'];
+let metrics = store.get('metrics', DEFAULT_METRICS);
+let cfg = Object.assign({start:10, end:22, step:2, lang:'sl-SI'}, store.get('cfg', {}));
+let entries = store.get('entries', []);
+const COLORS = ['#c8643b','#2f7fb8','#2f8f5b','#8a5cc2','#c2457a','#b08a1f','#4a8c8c'];
+const SCOL = ['','var(--s1)','var(--s2)','var(--s3)','var(--s4)','var(--s5)'];
+
+const pad = n => String(n).padStart(2,'0');
+const dkey = d => d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const slotsList = () => { const a=[]; for(let h=+cfg.start; h<=+cfg.end; h+=+cfg.step) a.push(h); return a; };
+function nearestSlot(d){
+  const h = d.getHours() + d.getMinutes()/60, s = slotsList();
+  return s.reduce((b,x) => Math.abs(x-h) < Math.abs(b-h) ? x : b, s[0]);
+}
+const fmtDay = k => { const d = new Date(k+'T12:00'); return d.toLocaleDateString('en-GB',{weekday:'short', day:'numeric', month:'short'}); };
+function toast(t){ const el=$('#toast'); el.textContent=t; el.classList.add('show'); clearTimeout(toast.t); toast.t=setTimeout(()=>el.classList.remove('show'),1800); }
+const esc = s => String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const word = (m,v) => m.id==='mood' ? MOOD_WORDS[v-1] : (v===1 ? (m.lo||'') : v===5 ? (m.hi||'') : '');
+
+/* ---------- check-in ---------- */
+let selDay = dkey(new Date()), selSlot = nearestSlot(new Date()), draft = {};
+function entryFor(day, slot){ return entries.find(e => e.date===day && e.slot===slot); }
+
+function renderSlots(){
+  const now = new Date(), today = dkey(now), h = now.getHours()+now.getMinutes()/60;
+  const s = slotsList(); let done = 0;
+  $('#slots').innerHTML = s.map(x => {
+    const e = entryFor(today, x); if (e) done++;
+    const cls = ['slot', e?'done':'', (x===selSlot && selDay===today)?'sel':'', (!e && x < h-1)?'missed':''].join(' ');
+    return `<button class="${cls}" data-slot="${x}">${x}:00<small>${e ? '✓' : (x < h-1 ? 'missed' : (Math.abs(x-h)<=1 ? 'now' : ''))}</small></button>`;
+  }).join('');
+  $('#donecount').textContent = done+' / '+s.length+' done';
+  const sel = $('#slots .sel'); if (sel) sel.scrollIntoView({inline:'center', block:'nearest'});
+}
+$('#slots').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-slot]'); if(!b) return;
+  selDay = dkey(new Date()); selSlot = +b.dataset.slot; loadDraft(); renderNow();
+});
+function loadDraft(){
+  const e = entryFor(selDay, selSlot);
+  draft = e ? {values:{...e.values}, notes:{...(e.notes||{})}} : {values:{}, notes:{}};
+}
+function renderForm(){
+  const existing = entryFor(selDay, selSlot);
+  $('#form').innerHTML = `<h2>${selSlot}:00 ${existing ? '<span class="mute small">· editing</span>' : ''}</h2>` +
+    metrics.map(m => {
+      const v = draft.values[m.id], n = draft.notes[m.id] || '';
+      return `<div class="metric" data-m="${m.id}">
+        <div class="q">${esc(m.name)}<span>${v ? esc(word(m,v) || v) : ''}</span></div>
+        <div class="scale">${[1,2,3,4,5].map(i => `<button data-v="${i}" class="${v===i?'on':''}">${i}</button>`).join('')}</div>
+        <div class="ends"><span>${esc(m.id==='mood'?'Terrible':m.lo||'')}</span><span>${esc(m.id==='mood'?'Excellent':m.hi||'')}</span></div>
+        <button class="notebtn">${n ? '✎ Note' : '+ Add a note'}</button>
+        <div class="noterow ${n?'open':''}"><textarea placeholder="Optional — type or tap 🎤">${esc(n)}</textarea><button class="mic" title="Dictate">🎤</button></div>
+      </div>`;
+    }).join('') +
+    `<button class="big" id="save">${existing ? 'Update' : 'Save check-in'}</button>`;
+  updateSave();
+}
+function updateSave(){ const b=$('#save'); if(b) b.disabled = metrics.some(m => !draft.values[m.id]); }
+$('#form').addEventListener('click', ev => {
+  const box = ev.target.closest('.metric');
+  if (ev.target.id === 'save') return saveEntry();
+  if (!box) return;
+  const id = box.dataset.m;
+  const vb = ev.target.closest('.scale button');
+  if (vb){
+    draft.values[id] = +vb.dataset.v;
+    box.querySelectorAll('.scale button').forEach(b => b.classList.toggle('on', b===vb));
+    const m = metrics.find(x=>x.id===id);
+    box.querySelector('.q span').textContent = word(m, +vb.dataset.v) || vb.dataset.v;
+    if (navigator.vibrate) navigator.vibrate(15);
+    updateSave(); return;
+  }
+  if (ev.target.closest('.notebtn')){ const r = box.querySelector('.noterow'); r.classList.add('open'); r.querySelector('textarea').focus(); return; }
+  if (ev.target.closest('.mic')) dictate(box);
+});
+$('#form').addEventListener('input', ev => {
+  if (ev.target.tagName === 'TEXTAREA') draft.notes[ev.target.closest('.metric').dataset.m] = ev.target.value;
+});
+
+let rec = null;
+function dictate(box){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const ta = box.querySelector('textarea'), btn = box.querySelector('.mic');
+  if (!SR){ toast('Use the 🎤 on your keyboard'); ta.focus(); return; }
+  if (rec){ rec.stop(); return; }
+  rec = new SR(); rec.lang = cfg.lang; rec.interimResults = false; rec.continuous = false;
+  const base = ta.value ? ta.value.replace(/\s*$/,' ') : '';
+  rec.onresult = e => {
+    const t = Array.from(e.results).map(r => r[0].transcript).join(' ');
+    ta.value = base + t; draft.notes[box.dataset.m] = ta.value;
+  };
+  rec.onend = () => { btn.classList.remove('live'); rec = null; };
+  rec.onerror = () => { toast('Dictation not available — use keyboard 🎤'); };
+  btn.classList.add('live'); rec.start();
+}
+
+function saveEntry(){
+  if (metrics.some(m => !draft.values[m.id])) return;
+  const now = new Date();
+  const id = selDay + '-' + pad(selSlot);
+  const notes = {}; Object.keys(draft.notes).forEach(k => { if ((draft.notes[k]||'').trim()) notes[k] = draft.notes[k].trim(); });
+  const e = {id, date:selDay, slot:selSlot, time:pad(now.getHours())+':'+pad(now.getMinutes()), values:{...draft.values}, notes};
+  entries = entries.filter(x => x.id !== id).concat(e).sort((a,b) => a.id < b.id ? -1 : 1);
+  store.set('entries', entries);
+  syncEntry(e);
+  toast('Saved ✓');
+  if (navigator.vibrate) navigator.vibrate([20,40,20]);
+  renderNow();
+}
+function renderNow(){ renderSlots(); renderForm(); }
+
+/* ---------- sync to Claude (App Logs) ---------- */
+function syncEntry(e){
+  try{
+    if (!window.AppSync) return;
+    const summary = metrics.map(m => `${m.name} ${e.values[m.id] ?? '–'}`).join(', ');
+    const details = {slot: e.slot + ':00', time: e.time};
+    metrics.forEach(m => { details[m.name] = e.values[m.id] ?? ''; if (e.notes && e.notes[m.id]) details[m.name + ' note'] = e.notes[m.id]; });
+    AppSync.send('Check-in', {id:e.id, date:e.date, summary, details});
+  }catch(err){}
+}
+
+/* ---------- stats ---------- */
+let range = 1;
+$('#range').addEventListener('click', ev => {
+  const b = ev.target.closest('button'); if(!b) return;
+  range = +b.dataset.r; $('#range').querySelectorAll('button').forEach(x => x.classList.toggle('on', x===b)); renderStats();
+});
+function inRange(){
+  if (!range) return entries.slice();
+  const d = new Date(); d.setDate(d.getDate() - (range-1)); const from = dkey(d);
+  return entries.filter(e => e.date >= from);
+}
+const avg = a => a.length ? a.reduce((s,x)=>s+x,0)/a.length : null;
+const f1 = v => v==null ? '–' : v.toFixed(1);
+
+function renderStats(){
+  const list = inRange(), el = $('#statsbody');
+  if (!list.length){ el.innerHTML = '<div class="card"><p class="mute">No check-ins in this period yet.</p></div>'; return; }
+  const days = [...new Set(list.map(e=>e.date))].sort();
+  const totalDays = range ? range : Math.max(1, Math.round((new Date(days.at(-1)) - new Date(days[0]))/864e5)+1);
+  const possible = totalDays * slotsList().length;
+  let html = `<div class="card"><h2>Averages</h2><div class="kpis">` +
+    metrics.map((m,i) => {
+      const a = avg(list.map(e=>e.values[m.id]).filter(v=>v!=null));
+      return `<div class="kpi"><div class="v" style="color:${COLORS[i%COLORS.length]}">${f1(a)}</div><div class="l">${esc(m.name)}</div></div>`;
+    }).join('') +
+    `<div class="kpi"><div class="v">${Math.round(100*list.length/possible)}%</div><div class="l">Check-ins done (${list.length}/${possible})</div></div>` +
+    `</div></div>`;
+
+  // trend: by slot for today, by day otherwise
+  const byKey = range===1 ? slotsList().map(String) : days;
+  const pts = metrics.map(m => byKey.map(k => {
+    const vs = list.filter(e => (range===1 ? String(e.slot) : e.date) === k).map(e=>e.values[m.id]).filter(v=>v!=null);
+    return avg(vs);
+  }));
+  html += `<div class="card"><h2>${range===1 ? 'Through the day' : 'Day by day'}</h2>${lineChart(byKey, pts)}
+    <div class="legend">${metrics.map((m,i)=>`<span style="--c:${COLORS[i%COLORS.length]}">${esc(m.name)}</span>`).join('')}</div></div>`;
+
+  // best time of day (for multi-day ranges)
+  if (range !== 1){
+    html += `<div class="card"><h2>By time of day</h2>` + metrics.map((m,i) => {
+      const rows = slotsList().map(s => ({s, a: avg(list.filter(e=>e.slot===s).map(e=>e.values[m.id]).filter(v=>v!=null))}));
+      const best = rows.filter(r=>r.a!=null).sort((a,b)=>b.a-a.a)[0];
+      return `<div style="margin-bottom:18px"><b>${esc(m.name)}</b>${best?` <span class="mute small">— best at ${best.s}:00</span>`:''}
+        <div class="bars">${rows.map(r=>`<div class="bar"><span>${r.s}:00</span><div class="t"><i style="width:${r.a?r.a/5*100:0}%;background:${COLORS[i%COLORS.length]}"></i></div><span>${f1(r.a)}</span></div>`).join('')}</div></div>`;
+    }).join('') + `</div>`;
+  }
+
+  // how often each score
+  html += `<div class="card"><h2>Score spread</h2>` + metrics.map(m => {
+    const vs = list.map(e=>e.values[m.id]).filter(v=>v!=null), n = vs.length || 1;
+    return `<div style="margin-bottom:14px"><b>${esc(m.name)}</b><div style="display:flex;height:40px;border-radius:10px;overflow:hidden;margin-top:6px">` +
+      [1,2,3,4,5].map(v => { const c = vs.filter(x=>x===v).length; return c ? `<div style="flex:${c};background:${SCOL[v]};color:#fff;font-weight:800;font-size:22px;display:flex;align-items:center;justify-content:center">${v}</div>` : ''; }).join('') +
+      `</div></div>`;
+  }).join('') + `</div>`;
+
+  // energy ↔ productivity link
+  if (metrics.length >= 2 && list.length >= 5){
+    html += `<div class="card"><h2>What moves together</h2>`;
+    for (let i=0;i<metrics.length;i++) for (let j=i+1;j<metrics.length;j++){
+      const pairs = list.filter(e=>e.values[metrics[i].id]!=null && e.values[metrics[j].id]!=null).map(e=>[e.values[metrics[i].id], e.values[metrics[j].id]]);
+      const r = corr(pairs);
+      if (r==null) continue;
+      const txt = Math.abs(r)<0.2 ? 'hardly related' : (r>0 ? (r>0.5?'strongly':'somewhat')+' rise together' : (r<-0.5?'strongly':'somewhat')+' move opposite');
+      html += `<p style="margin:0 0 10px">${esc(metrics[i].name)} &amp; ${esc(metrics[j].name)}: <b>${txt}</b> <span class="mute small">(r = ${r.toFixed(2)})</span></p>`;
+    }
+    html += `</div>`;
+  }
+  el.innerHTML = html;
+}
+function corr(p){
+  if (p.length < 5) return null;
+  const mx = avg(p.map(x=>x[0])), my = avg(p.map(x=>x[1]));
+  let sxy=0,sxx=0,syy=0; p.forEach(([x,y]) => { sxy+=(x-mx)*(y-my); sxx+=(x-mx)**2; syy+=(y-my)**2; });
+  return sxx && syy ? sxy/Math.sqrt(sxx*syy) : null;
+}
+function lineChart(keys, series){
+  const W=640, H=320, L=44, R=16, T=16, B=56, n=keys.length;
+  const x = i => n<=1 ? (L+W-R)/2 : L + i*(W-L-R)/(n-1);
+  const y = v => T + (5-v)*(H-T-B)/4;
+  let s = `<svg class="trend" viewBox="0 0 ${W} ${H}" role="img" aria-label="Trend chart">`;
+  for (let v=1; v<=5; v++) s += `<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="2"/><text x="${L-12}" y="${y(v)+8}" text-anchor="end" font-size="24" fill="var(--mute)">${v}</text>`;
+  const every = Math.ceil(n/6);
+  keys.forEach((k,i) => { if (i%every===0 || i===n-1) s += `<text x="${x(i)}" y="${H-16}" text-anchor="middle" font-size="22" fill="var(--mute)">${range===1 ? k+'h' : k.slice(8)+'.'+k.slice(5,7)}</text>`; });
+  series.forEach((pts,si) => {
+    const c = COLORS[si%COLORS.length]; let d='', pen=false;
+    pts.forEach((v,i) => { if (v==null){ pen=false; return; } d += (pen?'L':'M')+x(i).toFixed(1)+' '+y(v).toFixed(1)+' '; pen=true; });
+    s += `<path d="${d}" fill="none" stroke="${c}" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>`;
+    pts.forEach((v,i) => { if (v!=null) s += `<circle cx="${x(i)}" cy="${y(v)}" r="7" fill="${c}"/>`; });
+  });
+  return s + '</svg>';
+}
+
+/* ---------- history ---------- */
+function renderHistory(){
+  const el = $('#hist');
+  if (!entries.length){ el.innerHTML = '<div class="card"><p class="mute">Nothing yet. Your check-ins will show here.</p></div>'; return; }
+  const byDay = {}; entries.forEach(e => (byDay[e.date] = byDay[e.date] || []).push(e));
+  el.innerHTML = Object.keys(byDay).sort().reverse().slice(0,60).map(d => `<div class="card day"><h3>${fmtDay(d)}</h3>` +
+    byDay[d].sort((a,b)=>a.slot-b.slot).map(e => `<div class="entry"><div class="h">${e.slot}:00</div><div class="vals">` +
+      metrics.map(m => e.values[m.id]!=null ? `<span class="chip" style="background:${SCOL[e.values[m.id]]}" title="${esc(m.name)}">${esc(m.name.split(' ')[0])} ${e.values[m.id]}</span>` : '').join('') +
+      metrics.filter(m => e.notes && e.notes[m.id]).map(m => `<div class="n"><b>${esc(m.name)}:</b> ${esc(e.notes[m.id])}</div>`).join('') +
+      `</div><button data-del="${e.id}" aria-label="Delete">🗑</button></div>`).join('') + `</div>`).join('');
+}
+$('#hist').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-del]'); if (!b) return;
+  if (!confirm('Delete this check-in?')) return;
+  entries = entries.filter(e => e.id !== b.dataset.del); store.set('entries', entries); renderHistory(); toast('Deleted');
+});
+
+/* ---------- settings ---------- */
+function renderSettings(){
+  $('#mlist').innerHTML = metrics.map((m,i) => `<div class="mrow" data-i="${i}">
+    <label class="f"><span>Question ${i+1}</span><input class="t" data-k="name" value="${esc(m.name)}"></label>
+    <div class="row" style="flex-wrap:nowrap">
+      <input class="t" data-k="lo" placeholder="1 = …" value="${esc(m.lo)}">
+      <input class="t" data-k="hi" placeholder="5 = …" value="${esc(m.hi)}">
+      ${metrics.length>1 ? `<button class="ghost" data-rm="${i}" aria-label="Remove">✕</button>` : ''}
+    </div></div>`).join('');
+  const hrs = Array.from({length:24},(_,h)=>`<option value="${h}">${h}:00</option>`).join('');
+  $('#sStart').innerHTML = hrs; $('#sEnd').innerHTML = hrs;
+  $('#sStart').value = cfg.start; $('#sEnd').value = cfg.end; $('#sStep').value = cfg.step; $('#sLang').value = cfg.lang;
+}
+$('#mlist').addEventListener('input', ev => {
+  const row = ev.target.closest('.mrow'); if (!row || !ev.target.dataset.k) return;
+  metrics[+row.dataset.i][ev.target.dataset.k] = ev.target.value; store.set('metrics', metrics);
+});
+$('#mlist').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-rm]'); if (!b) return;
+  const m = metrics[+b.dataset.rm];
+  if (!confirm(`Remove "${m.name}"? Old scores stay saved.`)) return;
+  metrics.splice(+b.dataset.rm, 1); store.set('metrics', metrics); renderSettings();
+});
+$('#addm').addEventListener('click', () => {
+  metrics.push({id:'m'+Date.now().toString(36), name:'New question', lo:'', hi:''}); store.set('metrics', metrics); renderSettings();
+  const ins = $('#mlist').querySelectorAll('input[data-k="name"]'); const last = ins[ins.length-1]; last.focus(); last.select();
+});
+['sStart','sEnd','sStep','sLang'].forEach(id => $('#'+id).addEventListener('change', () => {
+  cfg = {start:+$('#sStart').value, end:+$('#sEnd').value, step:+$('#sStep').value, lang:$('#sLang').value};
+  if (cfg.end < cfg.start) cfg.end = cfg.start;
+  store.set('cfg', cfg); toast('Saved');
+}));
+$('#csv').addEventListener('click', () => {
+  const head = ['date','slot','time'].concat(metrics.map(m=>m.name), metrics.map(m=>m.name+' note'));
+  const q = v => '"'+String(v??'').replace(/"/g,'""')+'"';
+  const rows = entries.map(e => [e.date, e.slot+':00', e.time].concat(metrics.map(m=>e.values[m.id]??''), metrics.map(m=>(e.notes||{})[m.id]||'')).map(q).join(','));
+  const blob = new Blob(['﻿'+[head.map(q).join(',')].concat(rows).join('\n')], {type:'text/csv'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'check-ins-'+dkey(new Date())+'.csv'; a.click();
+});
+$('#resend').addEventListener('click', () => { entries.forEach(syncEntry); toast('Sending '+entries.length+' check-ins'); });
+
+/* reminders while open (best effort) */
+$('#notif').addEventListener('click', async () => {
+  if (!('Notification' in window)) return toast('Not supported here');
+  const p = await Notification.requestPermission(); toast(p==='granted' ? 'Reminders on' : 'Not allowed');
+});
+let lastPing = store.get('lastPing','');
+function tick(){
+  const now = new Date();
+  $('#clock').textContent = now.toLocaleDateString('en-GB',{weekday:'short', day:'numeric', month:'short'}) + ' · ' + pad(now.getHours())+':'+pad(now.getMinutes());
+  const key = dkey(now)+'-'+now.getHours();
+  if (now.getMinutes() < 5 && slotsList().includes(now.getHours()) && !entryFor(dkey(now), now.getHours()) && lastPing !== key){
+    lastPing = key; store.set('lastPing', key);
+    try{ if (Notification.permission==='granted') new Notification('Check-in time', {body:'Energy, mood, productivity — 10 seconds.', icon:'icon.svg', tag:'checkin'}); }catch(e){}
+    if (navigator.vibrate) navigator.vibrate([300,150,300]);
+  }
+  if (dkey(now) !== selDay){ selDay = dkey(now); selSlot = nearestSlot(now); loadDraft(); renderNow(); }
+}
+
+/* ---------- tabs ---------- */
+$('#tabs').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-go]'); if (!b) return; go(b.dataset.go);
+});
+function go(v){
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x.dataset.go===v));
+  document.querySelectorAll('section[data-view]').forEach(s => s.classList.toggle('on', s.dataset.view===v));
+  if (v==='now'){ selDay = dkey(new Date()); if (!entryFor(selDay, selSlot)) {} renderNow(); }
+  if (v==='stats') renderStats();
+  if (v==='history') renderHistory();
+  if (v==='settings') renderSettings();
+  window.scrollTo(0,0);
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState==='visible' && $('section[data-view="now"]').classList.contains('on')){
+    const n = new Date(); selDay = dkey(n); selSlot = nearestSlot(n); loadDraft(); renderNow();
+  }
+});
+
+loadDraft(); renderNow(); tick(); setInterval(tick, 30000);
+if (window.AppSync) AppSync.backfill('checkin', () => entries.forEach(syncEntry));
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
